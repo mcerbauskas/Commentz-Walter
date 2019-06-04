@@ -1,0 +1,263 @@
+1  """
+2  File: main.py
+3  –––––––––––––––––––
+4  Final Project: Commentz–Walter String Matching Algorithm
+5  Course: CS 166
+6  Author: Christina Gilbert
+7  Group: Christina Gilbert, Eric Ehizokhale, Jake Rachleff
+8  
+9  Main file for testing runtimes of Aho–Corasick vs Rabin Karp vs
+10 Commentz Walter algorithms for plagarism using k–shingles of a test
+11 file against a corpus of other files.
+12 """
+13 
+14 import pathlib
+15 import rabin_karp
+16 import time
+17 import random
+18 from enum import Enum
+19 from collections import namedtuple
+20 from structures import ACAuto
+21 from structures import CWAuto
+22 
+23 TEST_FILE = "corpus/testfile"
+24 CORPUS_PREFIX = "article_scraper/articles/"
+25 SHINGLE_CONSTANT = 50
+26 RANDOM = False
+27 OUTFILE_PATH = "outfile.txt"
+28 
+29 ac_match_count = 0
+30 
+31 
+32 ##### GENERAL UTILITIES #####
+33 
+34 
+35 class Algorithm(Enum):
+36  aho_corasick = 0
+37  rabin_karp = 1
+38  commentz_walter = 2
+39 
+40 def files_in_directory(dirname):
+41  """CITATION: Taken from the starter code of a CS41 assignment
+42 
+43  Return a list of filenames in the given directory.
+44 
+45  @param dirname: name of directory from which to acquire files.
+46  @return: list of strings representing names of files in the given directory
+47  """
+48  p = pathlib.Path(dirname)
+49  if not p.is_dir():
+50      raise NotADirectoryError("`{d}` is not a directory".format(d=dirname))
+51  return [str(child) for child in p.iterdir() if child.is_file()]
+52 
+53 
+54 ##### AHO CORASICK #####
+55 
+56 
+57 def build_automaton(shingles, automaton):
+58  """Return an Aho–Corasick Automaton for a list of shingles
+59 
+60  @param shingles: list of k–shingles
+61  @return: Aho–Corasick Automaton for shingles
+62  """
+63  a = ACAuto() if automaton == Algorithm.aho_corasick else CWAuto()
+64  for shingle in shingles:
+65      a.add_word(shingle)
+66  a.create_failure_links()
+67  return a
+68 
+69  # a = ahocorasick.Automaton()
+70  # for index, shingle in enumerate(shingles):
+71  #   a.add_word(shingle, (index, shingle))
+72  # a.make_automaton()
+73  # return a
+74 
+75 def get_random_shingles(text, k):
+76  """//TODO DOCUMENT
+77 
+78  @param text: string to convert to shingles
+79  @param k: length of each single
+80  @return: list of shingles
+81  """
+82 
+83  length = len(text)
+84 
+85  all_shingles = [text[i:i+k] for i in range(length) if i + k < length]
+86  random_shingles = random.sample(all_shingles, int(len(all_shingles)/SHINGLE_CONSTANT))
+87  return random_shingles
+88 
+89 def get_shingles(text, k):
+90  """Return a list of the k–singles of a text file
+91 
+92  @param text: string to convert to shingles
+93  @param k: length of each single
+94  @return: list of shingles
+95  """
+96 
+97  length = len(text)
+98  return [text[i:i+k] for i in range(length) if i + k < length]
+99 
+100def ac_match_callback(index, value):
+101 """Callback function for ac.find_all
+102
+103 Prints all matches and increments count.
+104
+105 @param index: index in string T of match
+106 @param value: tuple (index, value) number of shingle, text of shingle
+107 """
+108 global ac_match_count
+109 ac_match_count += 1
+110
+111def run_aho_corasick(shingles, file_names):
+112 """Uses Aho–Corasick automaton to find all matches
+113
+114 @param shingles: list of shingles of test document
+115 @param file_names: list of all file_names to be checked for shingles
+116 @return: (time, matches) time elapsed to match all shingles to all files
+117 total number of matches found in text
+118 """
+119
+120 #start the timer on aho–corasick
+121 start_time = time.time()
+122
+123 ac_total_matches = 0
+124 ac = build_automaton(shingles, Algorithm.aho_corasick)
+125
+126 for file_name in file_names:
+127     #print(file_name)
+128
+129     text = ''.join([line.rstrip('\n') for line in open(file_name)])
+130     ac_total_matches += ac.report_all_matches(text)
+131
+132 elapsed_time = time.time() – start_time
+133 return Result(elapsed_time, ac_total_matches)
+134
+135
+136##### RABIN KARP #####
+137def run_rabin_karp(test_file_text, shingles, shingle_len, file_names):
+138 """Uses Rabin–Karp algorithm to find all matches
+139
+140 @param shingles: list of shingles of test document
+141 @param file_names: list of all file_names to be checked for shingles
+142 @param shingle_len: length of shingles
+143 @return: Result(time, matches) time elapsed to match all shingles to all files
+144 total number of matches found in text
+145 """
+146
+147
+148 #TODO: Decide if this should come before or after timer
+149 shingles = set(shingles)
+150
+151 #start the timer on rabin–karp
+152 start_time = time.time()
+153
+154 pattern_set = rabin_karp.rabin_karp_pattern_set(test_file_text, shingle_len)
+155 rc_matches_count = 0
+156
+157 for file_name in file_names:
+158     text = ''.join([line.rstrip('\n') for line in open(file_name)])
+159     rc_matches_count += rabin_karp.rabin_karp_get_matches(text, shingle_len, shingles, pattern_set)
+160
+161
+162 elapsed_time = time.time() – start_time
+163 return Result(elapsed_time, rc_matches_count)
+164
+165
+166##### COMMENTZ WALTER #####
+167
+168
+169def run_commentz_walter(shingles, file_names):
+170 """Uses Commentz–Walter algorithm to find all matches
+171
+172 @param shingles: list of shingles of test document
+173 @param file_names: list of all file_names to be checked for shingles
+174 @return: Result(time, matches) time elapsed to match all shingles to all files
+175 total number of matches found in text
+176 """
+177
+178 start_time = time.time()
+179
+180 cw_total_matches = 0
+181 cw = build_automaton(shingles, Algorithm.commentz_walter)
+182
+183 for file_name in file_names:
+184     text = ''.join([line.rstrip('\n') for line in open(file_name)])
+185     cw_total_matches += cw.report_all_matches(text)
+186
+187 elapsed_time = time.time() – start_time
+188 return Result(elapsed_time, cw_total_matches)
+189
+190
+191##### MAIN #####
+192
+193
+194def run_tests(file_names, test_file_text, shingle_len, shingles, algorithm):
+195 """ Runs all tests on algorithm and prints and returns the runtime
+196
+197     @param file_names: list of all file_names to be checked for shingles
+198     @param test_file_text: text of the file we're testing against
+199     @param shingle_len
+200     @param algorithm: Algorithm to be tested
+201     @return: time elapsed to match all shingles to all files
+202 """
+203
+204 if(algorithm == Algorithm.aho_corasick):
+205     print("####   AHO–CORASICK   ####")
+206     result = run_aho_corasick(shingles, file_names)
+207
+208 if(algorithm == Algorithm.rabin_karp):
+209     print("####    RABIN–KARP    ####")
+210     result = run_rabin_karp(test_file_text, shingles, shingle_len, file_names)
+211
+212 if(algorithm == Algorithm.commentz_walter):
+213     print("#### COMMENTZ–WALTER  ####")
+214     result = run_commentz_walter(shingles, file_names)
+215     
+216 
+217 print("ELAPSED TIME: {time}".format(time=result.runtime))
+218 print("TOTAL MATCHES: {matches}".format(matches=result.matches))
+219 return result.runtime
+220
+221def write_to_outfile(string_to_write):
+222 try:
+223     new_file = open(OUTFILE_PATH, 'a')
+224     new_file.write(string_to_write)
+225     new_file.write('\n')
+226     new_file.close()
+227
+228 except:
+229     print('Error creating file {filename}'.format(filename = OUTFILE_PATH))
+230
+231def run_all_tests(file_names, test_file_text, shingles, shingle_len):
+232 print("SHINGLE LENGTH: {len}".format(len=shingle_len))
+233
+234 ac_runtime = run_tests(file_names, test_file_text, shingle_len, shingles, Algorithm.aho_corasick)
+235 rk_runtime = run_tests(file_names, test_file_text, shingle_len, shingles, Algorithm.rabin_karp)
+236 cw_runtime = run_tests(file_names, test_file_text, shingle_len, shingles, Algorithm.commentz_walter)
+237
+238 write_to_outfile("SHINGLE LENGTH: {len}".format(len=shingle_len))
+239 write_to_outfile(str(ac_runtime))
+240 write_to_outfile(str(rk_runtime))
+241 write_to_outfile(str(cw_runtime))
+242
+243 print("–– –– –– –– –– –– –– –– –– –– –– ")
+244
+245if __name__ == '__main__':
+246
+247 Result = namedtuple('Result', ['runtime', 'matches'])
+248 corpuses = []
+249 corpuses.append("all_articles2.3MB")
+250
+251 #test of document we want to detect plagarism in
+252 test_file_text = ''.join([line.rstrip('\n') for line in open(TEST_FILE)])
+253 
+254 for corpus in corpuses:
+255     write_to_outfile("CORPUS: {corpus}".format(corpus=corpus))
+256
+257     #filenames of all other files
+258     file_names = files_in_directory(CORPUS_PREFIX + corpus)
+259     for i in range(5, 15):
+260         shingles = get_shingles(test_file_text, i) if not RANDOM else get_random_shingles(test_file_text, i)
+261         print("RANDOM: {random}".format(random=RANDOM))
+262         print("CORPUS: {corpus}".format(corpus=corpus))
+263         run_all_tests(file_names, test_file_text, shingles, i)
